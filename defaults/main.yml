@@ -1,11 +1,4 @@
 ---
-
-#
-# variables needed to be defined in user's playbook
-#
-
-
-
 #
 # user-configurable defaults
 #
@@ -43,12 +36,46 @@ prometheus_clean_tarball:     true
 # rebuild each time?  (only applied to `git` version)
 prometheus_rebuild:           false
 
+# Path of the jdk on your machine - only used by JMX exporter
+jdk_path: /usr/java/jdk1.8.0_112
 
-#
+# Port the JMX exporter will expose metrics - default is 9242
+# For more info: https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+jmx_port: 9242
+
 # derived variables; internal use only.
 #
-
-
 #---- the following vars are handled in tasks/set-role-variables.yml ------
 
 #prometheus_node_exporter_use_systemd: False  # use "systemd" to start/restart service?
+
+## Grafana variables
+
+grafana_user: grafana
+grafana_group: grafana
+grafana_home: /usr/share/grafana
+log_dir: /var/log/grafana
+data_dir: /var/lib/grafana
+max_open_files: 10000
+conf_dir: /etc/grafana
+conf_file: /etc/grafana/grafana.ini
+restart_on_upgrade: true
+plugins_dir: /var/lib/grafana/plugins
+protocol: http
+http_port: 3000
+admin_user: admin
+admin_password: admin
+prometheus_url: http://prometheus:9090
+prometheus_datasource_names:
+  - Prometheus
+dashboard:
+  dashboard:
+    id: null
+    title: 'Production Overview'
+    tags: [templated]
+    timezone: browser
+    rows: [{}]
+    schemaVersion: 6
+    version: 0
+  overwrite: false
+dashboard_url: production-overview # url friendly version of dashboard title

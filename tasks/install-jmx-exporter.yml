@@ -1,0 +1,54 @@
+- name: Ensure directory exists for jmx_exporter
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "u=rwx,g=rx,o="
+  with_items:
+    - "/opt/jmx_exporter"
+- name: Download jmx_exporter jar artifacts
+  become: true
+  get_url:
+    url: https://oss.sonatype.org/service/local/repositories/releases/content/io/prometheus/jmx/jmx_prometheus_httpserver/0.9/jmx_prometheus_httpserver-0.9-jar-with-dependencies.jar
+    dest: /opt/jmx_exporter/jmx_prometheus_httpserver-0.9-jar-with-dependencies.jar
+    mode: 0755
+    checksum: sha256:86a53f299acefd2ea5f555a079c132757891d65a70f630a1362a2ff9c41c97e8
+
+- name: Copy jmx-exporter config
+  template:
+    src: "jmx-artemis.yml.j2"
+    dest: /opt/jmx_exporter/jmx-artemis.yml
+    owner: root
+    group: root
+    mode: 0644
+  register: jmx_exporter_config
+- debug: var=jmx_exporter_config
+  notify: reload jmx_exporter
+  when: jmx_exporter_config.changed
+
+- name: Copy init service for jmx-exporter
+  template:
+    src: "jmx-exporter.service.j2"
+    dest: /etc/init.d/jmx_exporter
+    owner: root
+    group: root
+    mode: 0755
+  register: jmx_exporter_service
+- debug: var=jmx_exporter_servie
+  notify: reload jmx_exporter
+  when: jmx_exporter_service.changed
+
+- name: Ensure jmxremote.password file is present - required
+  file:
+    path: "{{ jdk_path }}/jre/lib/management/jmxremote.password"
+    owner: root
+    group: root
+    mode: 0400
+    state: touch
+
+- name: Start jmx-exporter service
+  service:
+    name: jmx_exporter
+    state: started
+    enabled: yes

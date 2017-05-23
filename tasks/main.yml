@@ -52,9 +52,17 @@
   include: install-prometheus.yml
   when: '"prometheus" in prometheus_components'
 
+- name: install grafana
+  include: install-grafana.yml
+  when: '"grafana" in prometheus_components'
+
 - name: install node-exporter
   include: install-node-exporter.yml
   when: '"node_exporter" in prometheus_components'
+
+- name: install jmx-exporter
+  include: install-jmx-exporter.yml
+  when: '"jmx_exporter" in prometheus_components'
 
 - name: install alertmanager
   include: install-alertmanager.yml

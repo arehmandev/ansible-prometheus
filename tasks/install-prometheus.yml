@@ -110,11 +110,6 @@
 - name: copy INIT script to server
   template: src="../templates/prometheus.sysvinit.{{ ansible_os_family|lower }}.sh.j2"  dest="/etc/init.d/prometheus"  mode="a+x"
 
-- name: set INIT status
-  service: name=prometheus enabled=yes
-
-
-
 - name: copy rule files from playbook's, if any
   copy:
     src: "{{ playbook_dir }}/{{ item.value.src }}"
@@ -142,3 +137,5 @@
   notify:
     - reload prometheus
 
+- name: set INIT status and start
+  service: name=prometheus enabled=yes state=started

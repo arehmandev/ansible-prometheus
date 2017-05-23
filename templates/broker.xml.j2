@@ -1,0 +1,144 @@
+<?xml version='1.0'?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+
+<configuration xmlns="urn:activemq"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
+
+   <jms xmlns="urn:activemq:jms">
+      <queue name="DLQ"/>
+      <queue name="ExpiryQueue"/>
+{% for KEY in cpp_context_filtered %}
+      <queue name="{{ KEY | e }}.controller.command"/>
+      <queue name="{{ KEY | e }}.handler.command"/>
+      <topic name="{{ KEY | e }}.event"/>
+{% endfor %}
+      <queue name="staging.processor.event"/>
+      <topic name="public.event"/>
+      <topic name="auditing.event"/>
+   </jms>
+
+   <core xmlns="urn:activemq:core">
+
+      <name>default</name>
+
+      <persistence-enabled>{{ artemis_instance_broker_persistence_enabled | lower }}</persistence-enabled>
+
+      <!-- this could be ASYNCIO or NIO
+       -->
+      <journal-type>ASYNCIO</journal-type>
+
+      <paging-directory>./data/paging</paging-directory>
+
+      <bindings-directory>./data/bindings</bindings-directory>
+
+      <journal-directory>./data/journal</journal-directory>
+
+      <large-messages-directory>./data/large-messages</large-messages-directory>
+
+      <journal-min-files>2</journal-min-files>
+
+      <journal-pool-files>-1</journal-pool-files>
+
+      <!-- FIXME: enable security -->
+      <security-enabled>{{ artemis_instance_broker_security_enabled | lower }}</security-enabled>
+
+      <acceptors>
+{% if artemis_cluster_name is defined %}
+         <acceptor name="invm-acceptor">vm://0</acceptor>
+{% endif %}
+         <!-- Default ActiveMQ Artemis Acceptor.  Multi-protocol adapter.  Currently supports ActiveMQ Artemis Core, OpenWire, STOMP, AMQP, MQTT, and HornetQ Core. -->
+         <!-- performance tests have shown that openWire performs best with these buffer sizes -->
+         <acceptor name="netty-acceptor">tcp://0.0.0.0:61616?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576</acceptor>
+      </acceptors>
+
+{% if artemis_cluster_nodes | length > 1 %}
+      <cluster-user>{{ artemis_cluster_user }}</cluster-user>
+      <cluster-password>{{ artemis_cluster_password }}</cluster-password>
+
+      <connectors>
+         <connector name="invm-connector">vm://0</connector>
+         <connector name="netty-connector">tcp://localhost:61616</connector>
+{% for NODE in artemis_cluster_nodes %}
+<!-- Changes here for vagrant box (ipaddress from eth1 rather than eth0)-->
+         <connector name="{{ NODE }}-connector">tcp://{{ hostvars[NODE]['ansible_eth1']['ipv4']['address'] }}:61616</connector>
+{% endfor %}
+      </connectors>
+      <cluster-connections>
+         <cluster-connection name="{{ artemis_cluster_name }}">
+            <address>jms</address>
+            <connector-ref>{{ inventory_hostname }}-connector</connector-ref>
+            <static-connectors>
+{% for NODE in artemis_cluster_nodes %}
+               <connector-ref>{{ NODE }}-connector</connector-ref>
+{% endfor %}
+            </static-connectors>
+         </cluster-connection>
+      </cluster-connections>
+      <ha-policy>
+         <replication>
+            <colocated>
+               <max-backups>1</max-backups>
+               <request-backup>true</request-backup>
+               <backup-request-retry-interval>1000</backup-request-retry-interval>
+               <excludes>
+                  <connector-ref>invm-connector</connector-ref>
+                  <connector-ref>netty-connector</connector-ref>
+                  <connector-ref>{{ inventory_hostname }}-connector</connector-ref>
+               </excludes>
+	       <master>
+                 <check-for-live-server>true</check-for-live-server>
+               </master>
+	       <slave/>
+            </colocated>
+         </replication>
+      </ha-policy>
+{% endif %}
+
+      <security-settings>
+         <security-setting match="#">
+            <permission type="createNonDurableQueue" roles="amq"/>
+            <permission type="deleteNonDurableQueue" roles="amq"/>
+            <permission type="createDurableQueue" roles="amq"/>
+            <permission type="deleteDurableQueue" roles="amq"/>
+            <permission type="consume" roles="amq"/>
+            <permission type="send" roles="amq"/>
+            <!-- we need this otherwise ./artemis data imp wouldn't work -->
+            <permission type="manage" roles="amq"/>
+         </security-setting>
+      </security-settings>
+
+      <address-settings>
+         <!--default for catch all-->
+         <address-setting match="#">
+           <redistribution-delay>5</redistribution-delay>
+            <dead-letter-address>jms.queue.DLQ</dead-letter-address>
+            <expiry-address>jms.queue.ExpiryQueue</expiry-address>
+            <max-redelivery-delay>{{ cpp_artemis_messaging_defaults_max_redelivery_delay }}</max-redelivery-delay>
+            <redelivery-delay>{{ cpp_artemis_messaging_defaults_redelivery_delay }}</redelivery-delay>
+            <redelivery-delay-multiplier>{{ cpp_artemis_messaging_defaults_redelivery_delay_multiplier }}</redelivery-delay-multiplier>
+            <max-size-bytes>{{ artemis_instance_default_max_size_bytes }}</max-size-bytes>
+            <message-counter-history-day-limit>10</message-counter-history-day-limit>
+            <address-full-policy>PAGE</address-full-policy>
+            <max-delivery-attempts>{{ cpp_artemis_messaging_defaults_max_delivery_attempts }}</max-delivery-attempts>
+         </address-setting>
+      </address-settings>
+   </core>
+</configuration>

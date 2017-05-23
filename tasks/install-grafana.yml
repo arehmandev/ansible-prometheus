@@ -1,0 +1,85 @@
+---
+
+- name: install grafana
+  yum:
+    name: https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana-4.2.0-1.x86_64.rpm
+    state: present
+  become: true
+
+- name: copy over the environment variables
+  template:
+    src: templates/grafana-server.j2
+    dest: /etc/sysconfig/grafana-server
+  become: true
+  notify:
+    - restart grafana
+
+- name: copy over .ini file
+  template:
+    src: templates/grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+  become: true
+  notify:
+    - restart grafana
+
+
+- name: start and enable grafana service
+  service:
+    name: grafana-server
+    state: started
+    enabled: yes
+  become: true
+
+
+- name: check if datasource exists
+  uri:
+    url: "http://localhost:3000/api/datasources/name/{{ item }}"
+    user: "{{ admin_user}}"
+    password: "{{ admin_password }}"
+    force_basic_auth: yes
+  register: grafana_prometheus
+  failed_when: false
+  changed_when: false
+  with_items: "{{ prometheus_datasource_names }}"
+
+
+- name: Enable Prometheus Datasource
+  uri:
+    url: http://localhost:3000/api/datasources
+    method: POST
+    user: "{{ admin_user }}"
+    password: "{{ admin_password }}"
+    body:
+      name: "{{ item.item }}"
+      type: "prometheus"
+      url: "{{ prometheus_url }}"
+      access: "proxy"
+      isDefault: true
+    force_basic_auth: yes
+    status_code: 200
+    body_format: json
+  when: item.status == 404
+  with_items: "{{ grafana_prometheus.results }}"
+
+- name: check if dashboard exists
+  uri:
+    url: "http://localhost:3000/api/dashboards/db/{{ dashboard_url}}"
+    user: "{{ admin_user}}"
+    password: "{{ admin_password }}"
+    force_basic_auth: yes
+  register: grafana_dashboard
+  failed_when: false
+  changed_when: false
+
+- name: Add dashboard
+  uri:
+    url: http://localhost:3000/api/dashboards/db
+    method: POST
+    user: "{{ admin_user }}"
+    password: "{{ admin_password }}"
+    body: "{{ dashboard }}" # add json template here
+
+    force_basic_auth: yes
+    status_code: 200
+    body_format: json
+  when:  grafana_dashboard.status == 404
